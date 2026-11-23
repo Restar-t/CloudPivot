@@ -1,14 +1,60 @@
-import { Layout, Typography } from "antd";
-import { CloudServerOutlined } from "@ant-design/icons";
-import { Outlet } from "react-router-dom";
+import { useState } from "react";
+import { Avatar, Button, Dropdown, Form, Input, Layout, Modal, Typography, message } from "antd";
+import { CloudServerOutlined, KeyOutlined, LogoutOutlined, UserOutlined } from "@ant-design/icons";
+import { Outlet, useNavigate } from "react-router-dom";
+import type { MenuProps } from "antd";
+import { apiChangePassword, apiLogout } from "../api/auth";
+import { useAuthStore } from "../stores/auth";
 
 const { Header, Content, Footer } = Layout;
 
-/**
- * 主布局：顶栏（品牌 + 用户区占位）+ 内容区。
- * M1 顶栏右侧接入用户菜单（退出 / 改密）；M2 内容区挂文件列表页。
- */
+interface PasswordForm {
+  old_password: string;
+  new_password: string;
+  confirm: string;
+}
+
+/** 主布局：顶栏（品牌 + 用户菜单）+ 内容区。 */
 export default function MainLayout() {
+  const navigate = useNavigate();
+  const { user, refreshToken, setTokens, clear } = useAuthStore();
+  const [pwdOpen, setPwdOpen] = useState(false);
+  const [pwdLoading, setPwdLoading] = useState(false);
+  const [form] = Form.useForm<PasswordForm>();
+
+  const onLogout = async () => {
+    try {
+      await apiLogout(refreshToken);
+    } catch {
+      // 后端撤销失败也继续本地清理（token 已带上，尽力而为）
+    }
+    clear();
+    message.success("已退出登录");
+    navigate("/login", { replace: true });
+  };
+
+  const onChangePassword = async (values: PasswordForm) => {
+    setPwdLoading(true);
+    try {
+      const pair = await apiChangePassword(values.old_password, values.new_password, refreshToken);
+      setTokens(pair);
+      message.success("密码已修改，其他设备会话已失效");
+      setPwdOpen(false);
+      form.resetFields();
+    } catch {
+      // 错误提示已由拦截器统一弹出
+    } finally {
+      setPwdLoading(false);
+    }
+  };
+
+  const items: MenuProps["items"] = [
+    { key: "username", label: <span style={{ fontWeight: 600 }}>{user?.username}</span>, disabled: true },
+    { type: "divider" },
+    { key: "password", icon: <KeyOutlined />, label: "修改密码", onClick: () => setPwdOpen(true) },
+    { key: "logout", icon: <LogoutOutlined />, label: "退出登录", onClick: () => void onLogout() },
+  ];
+
   return (
     <Layout style={{ minHeight: "100%" }}>
       <Header
@@ -26,17 +72,66 @@ export default function MainLayout() {
             网盘
           </Typography.Title>
         </div>
-        {/* 用户区占位：M1 登录后显示头像与菜单 */}
-        <Typography.Text style={{ color: "rgba(255,255,255,0.65)" }}>
-          未登录
-        </Typography.Text>
+        <Dropdown menu={{ items }} placement="bottomRight">
+          <span style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <Avatar style={{ backgroundColor: "#1677ff" }} icon={<UserOutlined />} />
+            <span style={{ color: "rgba(255,255,255,0.85)" }}>{user?.username}</span>
+          </span>
+        </Dropdown>
       </Header>
       <Content style={{ padding: 24, maxWidth: 1200, width: "100%", margin: "0 auto" }}>
         <Outlet />
       </Content>
       <Footer style={{ textAlign: "center", color: "rgba(0,0,0,0.45)" }}>
-        netdisk · M0 骨架阶段
+        netdisk · M1 认证阶段
       </Footer>
+
+      <Modal
+        title="修改密码"
+        open={pwdOpen}
+        onCancel={() => setPwdOpen(false)}
+        footer={null}
+        destroyOnClose
+      >
+        <Form form={form} layout="vertical" onFinish={onChangePassword}>
+          <Form.Item
+            name="old_password"
+            label="原密码"
+            rules={[{ required: true, message: "请输入原密码" }]}
+          >
+            <Input.Password />
+          </Form.Item>
+          <Form.Item
+            name="new_password"
+            label="新密码"
+            rules={[
+              { required: true, message: "请输入新密码" },
+              { min: 8, message: "密码至少 8 位" },
+            ]}
+          >
+            <Input.Password />
+          </Form.Item>
+          <Form.Item
+            name="confirm"
+            label="确认新密码"
+            dependencies={["new_password"]}
+            rules={[
+              { required: true, message: "请再次输入新密码" },
+              ({ getFieldValue }) => ({
+                validator: (_, value) =>
+                  !value || getFieldValue("new_password") === value
+                    ? Promise.resolve()
+                    : Promise.reject(new Error("两次输入的密码不一致")),
+              }),
+            ]}
+          >
+            <Input.Password />
+          </Form.Item>
+          <Button type="primary" htmlType="submit" block loading={pwdLoading}>
+            确认修改
+          </Button>
+        </Form>
+      </Modal>
     </Layout>
   );
 }
