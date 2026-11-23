@@ -1,0 +1,23 @@
+# ---- 通用 ----
+.env
+*.log
+.DS_Store
+Thumbs.db
+
+# ---- Python 后端 ----
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+backend/*.db
+
+# ---- 前端 ----
+node_modules/
+frontend/dist/
+*.local
+
+# ---- IDE ----
+.idea/
+.vscode/

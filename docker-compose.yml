@@ -1,0 +1,112 @@
+name: netdisk
+
+# 全组件编排（M0 起纳入版本控制，随里程碑逐步补全服务）
+# 用法：cp .env.example .env && docker compose up -d --build
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: netdisk-mysql
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?need MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-netdisk}
+      MYSQL_USER: ${MYSQL_USER:-netdisk}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?need MYSQL_PASSWORD in .env}
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    # 不对宿主机发布 3306，避免与本地已有 MySQL 冲突；需要时用 docker exec 进入
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$MYSQL_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    networks: [netdisk]
+
+  redis:
+    image: redis:7-alpine
+    container_name: netdisk-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [netdisk]
+
+  minio:
+    image: minio/minio:latest
+    container_name: netdisk-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-netdisk}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?need MINIO_ROOT_PASSWORD in .env}
+    volumes:
+      - minio_data:/data
+    ports:
+      # 对宿主机开放便于调试：9000 S3 API / 9001 控制台
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [netdisk]
+
+  backend:
+    build: ./backend
+    container_name: netdisk-backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # 容器网络内覆盖为服务名（优先级高于 env_file）
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      MINIO_ENDPOINT: minio:9000
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request as u,sys;sys.exit(0 if u.urlopen('http://127.0.0.1:8000/api/ping',timeout=3).status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks: [netdisk]
+
+  frontend:
+    build: ./frontend
+    container_name: netdisk-frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks: [netdisk]
+
+volumes:
+  mysql_data:
+  redis_data:
+  minio_data:
+
+networks:
+  netdisk:
