@@ -56,6 +56,8 @@ class Settings(BaseSettings):
     jwt_refresh_ttl_days: int = 14
     login_fail_threshold: int = 5
     login_fail_window_seconds: int = 900
+    login_lock_max_seconds: int = 1800
+    password_hash_rounds: int = 12
 
     # ---------- 上传限制（M3 生效）----------
     upload_max_file_size: int = 5 * 1024**3  # 5GiB

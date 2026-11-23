@@ -12,3 +12,5 @@ minio==7.2.12
 redis==5.2.1
 httpx==0.28.1
 python-multipart==0.0.20
+bcrypt==4.2.1
+PyJWT==2.10.1

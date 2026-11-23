@@ -15,6 +15,8 @@ os.environ.setdefault("MINIO_ENDPOINT", "127.0.0.1:59000")
 os.environ.setdefault("MINIO_CALL_TIMEOUT", "1")
 os.environ.setdefault("BUCKET_INIT_RETRIES", "1")
 os.environ.setdefault("BUCKET_INIT_DELAY_SECONDS", "0")
+# 测试用低轮数 bcrypt（安全参数只影响哈希成本，不影响逻辑）
+os.environ.setdefault("PASSWORD_HASH_ROUNDS", "4")
 
 import pytest
 from fastapi.testclient import TestClient

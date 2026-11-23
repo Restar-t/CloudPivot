@@ -13,8 +13,8 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from app.core.config import get_settings
 from app.db.base import Base
 
-# 确保 models 包被导入后，metadata 才收集到全部表（M1 起生效）
-# import app.models  # noqa: F401  (models 逐里程碑补充后取消注释)
+# 确保模型全部被导入，metadata 才能收集到表
+import app.models  # noqa: F401,E402
 
 config = context.config
 if config.config_file_name is not None:
