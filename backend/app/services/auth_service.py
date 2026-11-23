@@ -68,9 +68,21 @@ async def _write_login_log(
 
 # ---------- 注册 ----------
 async def register(db: AsyncSession, username: str, password: str) -> UserOut:
+    """注册事务化（M2.2）：建用户 + 个人空间 + OWNER 成员，同一事务。"""
+    from app.models.space import ROLE_OWNER, SPACE_TYPE_PERSONAL, Space, SpaceMember
+
     try:
         user = User(username=username, password_hash=hash_password(password))
         db.add(user)
+        await db.flush()
+        space = Space(
+            type=SPACE_TYPE_PERSONAL,
+            name=f"{username} 的个人空间",
+            owner_id=user.id,
+        )
+        db.add(space)
+        await db.flush()
+        db.add(SpaceMember(space_id=space.id, user_id=user.id, role=ROLE_OWNER))
         await db.commit()
         await db.refresh(user)
     except IntegrityError as exc:
