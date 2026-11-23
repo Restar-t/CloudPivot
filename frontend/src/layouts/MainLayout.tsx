@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { Avatar, Button, Dropdown, Form, Input, Layout, Modal, Typography, message } from "antd";
-import { CloudServerOutlined, KeyOutlined, LogoutOutlined, UserOutlined } from "@ant-design/icons";
-import { Outlet, useNavigate } from "react-router-dom";
+import {
+  CloudServerOutlined,
+  KeyOutlined,
+  LogoutOutlined,
+  UserOutlined,
+} from "@ant-design/icons";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import type { MenuProps } from "antd";
 import { apiChangePassword, apiLogout } from "../api/auth";
 import { useAuthStore } from "../stores/auth";
@@ -14,9 +19,10 @@ interface PasswordForm {
   confirm: string;
 }
 
-/** 主布局：顶栏（品牌 + 用户菜单）+ 内容区。 */
+/** 主布局：顶栏（品牌 + 导航 + 用户菜单）+ 内容区。 */
 export default function MainLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, refreshToken, setTokens, clear } = useAuthStore();
   const [pwdOpen, setPwdOpen] = useState(false);
   const [pwdLoading, setPwdLoading] = useState(false);
@@ -71,6 +77,30 @@ export default function MainLayout() {
           <Typography.Title level={4} style={{ color: "#fff", margin: 0 }}>
             网盘
           </Typography.Title>
+          <nav style={{ marginLeft: 24, display: "flex", gap: 16 }}>
+            {[
+              { to: "/", label: "我的文件" },
+              { to: "/system", label: "系统状态" },
+            ].map((item) => {
+              const active =
+                item.to === "/"
+                  ? location.pathname === "/" || location.pathname.startsWith("/folders")
+                  : location.pathname.startsWith(item.to);
+              return (
+                <span
+                  key={item.to}
+                  onClick={() => navigate(item.to)}
+                  style={{
+                    cursor: "pointer",
+                    color: active ? "#fff" : "rgba(255,255,255,0.65)",
+                    fontWeight: active ? 600 : 400,
+                  }}
+                >
+                  {item.label}
+                </span>
+              );
+            })}
+          </nav>
         </div>
         <Dropdown menu={{ items }} placement="bottomRight">
           <span style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
