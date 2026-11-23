@@ -20,6 +20,7 @@ erDiagram
     user_file ||--o{ share : ""
     share ||--o{ share_session : ""
     user ||--o{ login_log : ""
+    user ||--o{ refresh_session : "可撤销刷新会话族（M1）"
     user ||--o{ operation_log : ""
     space ||--o{ file_index : ""
 
@@ -142,8 +143,17 @@ erDiagram
         bigint id PK
         varchar username
         varchar ip
-        enum result
+        enum result "SUCCESS|FAILED|LOCKED"
         datetime created_at
+    }
+    refresh_session {
+        bigint id PK
+        varchar family_id "登录=新族，刷新=族内轮换"
+        bigint user_id FK
+        varchar token_hash UK "SHA-256，重用检测依据"
+        datetime expires_at
+        datetime revoked_at "NULL=活跃"
+        varchar revoked_reason "rotated|logout|password_changed|reuse_detected"
     }
     operation_log {
         bigint id PK
