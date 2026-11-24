@@ -91,6 +91,10 @@ netdisk/
 
 ## 已知边界（当前）
 
+- **MinIO 渠道变更**：MinIO 社区版已停摆（2025 源码化 → 2026-04 仓库归档 → 2026-09 Docker Hub
+  `minio/minio` 镜像删除、dl.min.io 二进制全部 410）。本项目 compose 改用
+  `bitnamilegacy/minio:2025.7.23-debian-12-r5`（Bitnami 冻结镜像，内含真 MinIO 服务端，
+  版本固定保证可复现）；应用侧使用 minio-py SDK 走标准 S3 协议，不受影响。
 - **compose 运行验证延后**：本机未安装 Docker，`docker compose up` 的官方验证推迟到
   M3 / M6 / M9 三个检查点执行（中级闭环、可靠传输、交付定稿各一次）；期间每个里程碑
   仍同步维护 compose 与 Dockerfile（本地以单测 + 本地服务验证代替）。M0 的本地等价验证
