@@ -79,7 +79,9 @@ netdisk/
 
 - [x] M0 骨架与横切基础（compose 一键起 / 冒烟绿 / 前后端联通）
 - [x] M1 认证与账号（注册/登录/刷新轮换+重用检测/退出/改密/爆破防护）
-- [x] M2 空间与目录树（个人空间/目录 CRUD/分页排序/面包屑/重命名 generation/越权 404 隔离；75 测试）
+- [x] M2 空间与目录树（个人空间/目录 CRUD/分页排序/面包屑/重命名 generation/越权 404 隔离）
+- [x] compose 全栈验证（Docker Desktop 一键起五容器、/health 三依赖 up、冒烟全绿、
+      浏览器登录/建目录实测、backend 重启持久化验证）
 - [ ] M2 空间与目录树（RBAC 地基）
 - [ ] M3 单文件闭环
 - [ ] M4 回收站/移动/搜索/ZIP
@@ -95,9 +97,6 @@ netdisk/
   `minio/minio` 镜像删除、dl.min.io 二进制全部 410）。本项目 compose 改用
   `bitnamilegacy/minio:2025.7.23-debian-12-r5`（Bitnami 冻结镜像，内含真 MinIO 服务端，
   版本固定保证可复现）；应用侧使用 minio-py SDK 走标准 S3 协议，不受影响。
-- **compose 运行验证延后**：本机未安装 Docker，`docker compose up` 的官方验证推迟到
-  M3 / M6 / M9 三个检查点执行（中级闭环、可靠传输、交付定稿各一次）；期间每个里程碑
-  仍同步维护 compose 与 Dockerfile（本地以单测 + 本地服务验证代替）。M0 的本地等价验证
-  已完成：后端启动 / 冒烟脚本红绿逻辑 / 前后端联通（浏览器实测）。
-- Windows 本机若开启系统代理/TUN，MinIO 客户端对回环地址的探测可能被代理拦截；后端已内置
-  显式连接/读超时与调用级兜底超时（`MINIO_CALL_TIMEOUT`），不会挂死启动。容器内无此问题。
+- 构建镜像内 pip/npm 已切换清华源/npmmirror（国内直连稳定），拉取基础镜像需代理或加速器（仅首次）。
+- Docker Desktop 代理为手动模式指向 `127.0.0.1:7890`（改机时需按实际代理调整或删除
+  `%APPDATA%\Docker\settings-store.json` 中的 OverrideProxy* 键）。

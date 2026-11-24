@@ -1,7 +1,8 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --no-fund --no-audit
+# npmmirror（国内直连稳定）
+RUN npm config set registry https://registry.npmmirror.com && npm ci --no-fund --no-audit
 COPY . .
 RUN npm run build
 
