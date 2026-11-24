@@ -18,6 +18,9 @@ services:
       TZ: ${TZ:-Asia/Shanghai}
     volumes:
       - mysql_data:/var/lib/mysql
+    ports:
+      # GUI 客户端（Navicat/DBeaver 等）用 127.0.0.1:3307 连容器库，避开本机 3306
+      - "127.0.0.1:3307:3306"
     # 不对宿主机发布 3306，避免与本地已有 MySQL 冲突；需要时用 docker exec 进入
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$MYSQL_PASSWORD --silent"]
