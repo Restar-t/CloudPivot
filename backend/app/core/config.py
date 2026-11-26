@@ -84,6 +84,8 @@ class Settings(BaseSettings):
     download_rate_burst_bytes: int = 8 * 1024**2
     zip_max_entries: int = 100
     zip_max_total_bytes: int = 2 * 1024**3  # 2GiB
+    share_session_ttl_hours: int = 24
+    share_preview_text_max_bytes: int = 2 * 1024**2  # 文本预览上限 2MiB，超出强制下载
 
     # ---------- 派生 ----------
     @property

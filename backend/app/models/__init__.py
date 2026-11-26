@@ -11,6 +11,7 @@ from app.models.operation_log import (
 )
 from app.models.quota_usage import QuotaUsage
 from app.models.refresh_session import RefreshSession
+from app.models.share import SHARE_STATUS_ACTIVE, SHARE_STATUS_CANCELLED, Share, ShareSession
 from app.models.space import ROLE_ADMIN, ROLE_EDITOR, ROLE_OWNER, ROLE_VIEWER, Space, SpaceMember
 from app.models.storage_object import (
     OBJECT_STATUS_ACTIVE,
@@ -35,5 +36,6 @@ __all__ = [
     "FILE_STATUS_NORMAL", "FILE_STATUS_TRASH", "FILE_STATUS_DELETED",
     "StorageObject", "OBJECT_STATUS_ACTIVE", "OBJECT_STATUS_DELETING", "OBJECT_STATUS_DELETED",
     "FileVersion", "QuotaUsage", "OperationLog",
+    "Share", "ShareSession", "SHARE_STATUS_ACTIVE", "SHARE_STATUS_CANCELLED",
     "ACTION_UPLOAD", "ACTION_DOWNLOAD", "ACTION_DELETE", "ACTION_RENAME", "ACTION_FOLDER_CREATE",
 ]

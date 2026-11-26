@@ -25,6 +25,8 @@ import {
   ReloadOutlined,
   EditOutlined,
   UploadOutlined,
+  ShareAltOutlined,
+  EyeOutlined,
 } from "@ant-design/icons";
 import type { TablePaginationConfig } from "antd";
 import { createFolder, getPath, listChildren, renameFile, type FileItem } from "../api/files";
@@ -36,6 +38,8 @@ import {
   type QuotaInfo,
 } from "../api/transfer";
 import UploadPanel, { type UploadTask } from "../components/UploadPanel";
+import ShareDialog from "../components/ShareDialog";
+import PreviewModal from "../components/PreviewModal";
 import MoveCopyDialog from "../components/MoveCopyDialog";
 import { batchDelete } from "../api/files";
 import { downloadZip } from "../api/transfer";
@@ -75,6 +79,8 @@ export default function Files() {
   // M4：多选批量 / 移动复制对话框 / 搜索
   const [selectedIds, setSelectedIds] = useState<import("react").Key[]>([]);
   const [dialog, setDialog] = useState<"move" | "copy" | null>(null);
+  const [shareFile, setShareFile] = useState<FileItem | null>(null);
+  const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -407,7 +413,7 @@ export default function Files() {
           {
             title: "操作",
             key: "actions",
-            width: 160,
+            width: 220,
             render: (_, item) => (
               <Space size={0}>
                 <Tooltip title="重命名">
@@ -422,15 +428,33 @@ export default function Files() {
                   />
                 </Tooltip>
                 {!item.is_folder && (
-                  <Tooltip title="下载">
-                    <Button
-                      size="small"
-                      type="text"
-                      icon={<DownloadOutlined />}
-                      loading={downloading.has(item.id)}
-                      onClick={() => void onDownload(item)}
-                    />
-                  </Tooltip>
+                  <>
+                    <Tooltip title="预览">
+                      <Button
+                        size="small"
+                        type="text"
+                        icon={<EyeOutlined />}
+                        onClick={() => setPreviewFile(item)}
+                      />
+                    </Tooltip>
+                    <Tooltip title="下载">
+                      <Button
+                        size="small"
+                        type="text"
+                        icon={<DownloadOutlined />}
+                        loading={downloading.has(item.id)}
+                        onClick={() => void onDownload(item)}
+                      />
+                    </Tooltip>
+                    <Tooltip title="分享">
+                      <Button
+                        size="small"
+                        type="text"
+                        icon={<ShareAltOutlined />}
+                        onClick={() => setShareFile(item)}
+                      />
+                    </Tooltip>
+                  </>
                 )}
                 <Popconfirm
                   title={item.is_folder ? "将此目录及其内容移入回收站？" : "将此文件移入回收站？"}
@@ -454,6 +478,17 @@ export default function Files() {
         fileIds={selectedNumeric}
         onClose={() => setDialog(null)}
         onDone={() => void onMoveCopyDone()}
+      />
+
+      <ShareDialog
+        open={shareFile !== null}
+        file={shareFile}
+        onClose={() => setShareFile(null)}
+      />
+      <PreviewModal
+        open={previewFile !== null}
+        file={previewFile}
+        onClose={() => setPreviewFile(null)}
       />
 
       <Modal

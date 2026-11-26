@@ -81,6 +81,7 @@ export default function MainLayout() {
             {[
               { to: "/", label: "我的文件" },
               { to: "/trash", label: "回收站" },
+              { to: "/shares", label: "我的分享" },
               { to: "/system", label: "系统状态" },
             ].map((item) => {
               const active =

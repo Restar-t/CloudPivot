@@ -16,7 +16,7 @@ from app.schemas.file import (
     RenameRequest,
     UploadOut,
 )
-from app.services import file_ops_service, file_service, folder_service, zip_service
+from app.services import file_ops_service, file_service, folder_service, preview_service, zip_service
 
 router = APIRouter(route_class=ApiRoute, prefix="/files", tags=["files"])
 
@@ -91,6 +91,53 @@ async def download(file_id: int, request: Request, user: CurrentUser, db: DB, st
     return StreamingResponse(
         file_service.iter_object(storage, obj, 0, size),
         status_code=200, media_type="application/octet-stream", headers=headers,
+    )
+
+
+@router.get("/{file_id}/preview")
+async def preview_file(file_id: int, user: CurrentUser, db: DB, storage: StorageDep):
+    """成员预览：魔数识别 + 类型决策（图片/PDF/文本 inline；SVG/HTML 强制下载）。"""
+    from app.core.config import get_settings
+
+    file, obj, version, etag = await file_service.download_file(db, storage, user, file_id)
+    size = int(obj.size)
+
+    head = b""
+    async for chunk in file_service.iter_object(storage, obj, 0, min(64, size)):
+        head += chunk
+
+    text_ok = False
+    if file.name.lower().endswith(tuple(preview_service._TEXT_EXTS)):
+        limit = get_settings().share_preview_text_max_bytes
+        if size <= limit:
+            data = b""
+            async for chunk in file_service.iter_object(storage, obj, 0, size):
+                data += chunk
+            text_ok = preview_service.try_decode_text(data) is not None
+
+    decision = preview_service.decide(file.name, head, size, text_ok)
+    common = {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "X-Preview-Reason": decision.reason,
+        "ETag": etag,
+    }
+    if decision.disposition == "attachment":
+        return StreamingResponse(
+            file_service.iter_object(storage, obj, 0, size),
+            status_code=200, media_type=decision.content_type,
+            headers={**common, "Content-Disposition": file_service.content_disposition(file.name),
+                     "Content-Length": str(size)},
+        )
+    return StreamingResponse(
+        file_service.iter_object(storage, obj, 0, size),
+        status_code=200,
+        headers={
+            **common,
+            "Content-Type": decision.content_type,
+            "Content-Security-Policy": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
+            "Content-Length": str(size),
+        },
     )
 
 

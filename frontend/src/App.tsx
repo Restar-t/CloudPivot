@@ -7,11 +7,14 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Search from "./pages/Search";
 import Trash from "./pages/Trash";
+import MyShares from "./pages/MyShares";
+import PublicShare from "./pages/PublicShare";
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/s/:token" element={<PublicShare />} />
       <Route path="/register" element={<Register />} />
       <Route element={<RequireAuth />}>
         <Route element={<MainLayout />}>
@@ -19,6 +22,7 @@ export default function App() {
           <Route path="/folders/:folderId" element={<Files />} />
           <Route path="/search" element={<Search />} />
           <Route path="/trash" element={<Trash />} />
+          <Route path="/shares" element={<MyShares />} />
           <Route path="/system" element={<Home />} />
         </Route>
       </Route>
