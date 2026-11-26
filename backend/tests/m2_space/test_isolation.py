@@ -4,7 +4,6 @@
 - 成员但角色不足 → 403 / 6001（VIEWER 只读：可列表，不可建/改名）
 - 无 token → 401 / 1001
 """
-import asyncio
 
 from sqlalchemy import select
 
@@ -43,7 +42,7 @@ def test_cross_user_isolation_404(api, make_user):
     assert resp.json()["data"]["total"] == 0
 
 
-def test_viewer_role_readonly(api, session_factory, make_user):
+def test_viewer_role_readonly(api, session_factory, db_run, make_user):
     """注入 VIEWER 成员（M8 前无成员管理接口，直接写库构造场景）。"""
     alice = make_user("alice")
     bob = make_user("bob")
@@ -60,7 +59,7 @@ def test_viewer_role_readonly(api, session_factory, make_user):
             db.add(SpaceMember(space_id=space_id, user_id=bob["user"]["id"], role=ROLE_VIEWER))
             await db.commit()
 
-    asyncio.run(add_viewer())
+    db_run(add_viewer())
 
     # VIEWER：可列表、可看面包屑
     assert api.get(f"/api/folders/{folder['id']}/children", headers=auth(bob)).status_code == 200

@@ -1,5 +1,4 @@
 """M2 空间与目录树：注册事务化 / 文件夹 CRUD / 分页排序 / 面包屑 / 重命名。"""
-import asyncio
 
 from sqlalchemy import select
 
@@ -8,7 +7,7 @@ from app.models.user_file import UserFile
 from tests.conftest import auth
 
 
-def test_register_creates_personal_space(api, session_factory, make_user):
+def test_register_creates_personal_space(api, session_factory, db_run, make_user):
     make_user("alice")
 
     async def check():
@@ -19,7 +18,7 @@ def test_register_creates_personal_space(api, session_factory, make_user):
             member = (await db.execute(select(SpaceMember))).scalar_one()
             assert member.role == ROLE_OWNER
 
-    asyncio.run(check())
+    db_run(check())
 
 
 def test_create_folder_and_duplicate(api, make_user):
@@ -103,7 +102,7 @@ def test_path_breadcrumb(api, make_user):
     assert [(x["id"], x["name"]) for x in resp.json()["data"]["items"]] == [(0, "根目录")]
 
 
-def test_rename_folder(api, session_factory, make_user):
+def test_rename_folder(api, session_factory, db_run, make_user):
     user = make_user("alice")
     folder = api.post("/api/folders", json={"parent_id": 0, "name": "old"}, headers=auth(user)).json()["data"]
     other = api.post("/api/folders", json={"parent_id": 0, "name": "other"}, headers=auth(user)).json()["data"]
@@ -118,7 +117,7 @@ def test_rename_folder(api, session_factory, make_user):
             row = await db.get(UserFile, folder["id"])
             assert row.generation == 1  # 改名必须 bump（M6 上传冲突校验依赖）
 
-    asyncio.run(check_generation())
+    db_run(check_generation())
 
     # 改成现有同名 → 409
     resp = api.patch(f"/api/files/{folder['id']}/rename", json={"new_name": "other"},
@@ -135,7 +134,7 @@ def test_rename_folder(api, session_factory, make_user):
     assert resp.status_code == 404
 
 
-def test_is_ancestor_tool(api, session_factory, make_user):
+def test_is_ancestor_tool(api, session_factory, db_run, make_user):
     """循环祖先校验（M4 移动的循环检测基础）。"""
     from app.services.folder_service import is_ancestor
 
@@ -150,4 +149,4 @@ def test_is_ancestor_tool(api, session_factory, make_user):
             assert await is_ancestor(db, b, b) is True  # 自身也算（移动到自身必须拒绝）
             assert await is_ancestor(db, a, 0) is False
 
-    asyncio.run(main())
+    db_run(main())

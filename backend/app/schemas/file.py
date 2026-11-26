@@ -25,6 +25,19 @@ class RenameRequest(BaseModel):
     new_name: str = Field(min_length=1, max_length=255)
 
 
+class UploadOut(FileItemOut):
+    version_no: int
+    storage_object_id: int
+    sha256: str
+    size: int
+
+
+class QuotaOut(BaseModel):
+    quota_bytes: int
+    used_bytes: int
+    remaining_bytes: int
+
+
 class PageOut(BaseModel):
     items: list[FileItemOut]
     total: int

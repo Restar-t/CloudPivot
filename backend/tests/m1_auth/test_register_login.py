@@ -1,5 +1,4 @@
 """注册与登录主流程 + 爆破锁定。"""
-import asyncio
 
 from sqlalchemy import func, select
 
@@ -32,7 +31,7 @@ def test_register_invalid_input(client):
     assert resp.status_code == 422
 
 
-def test_login_success(client, session_factory):
+def test_login_success(client, session_factory, db_run):
     client.post("/api/auth/register", json={"username": "alice", "password": "alicepass123"})
     resp = client.post("/api/auth/login", json={"username": "alice", "password": "alicepass123"})
     assert resp.status_code == 200
@@ -47,10 +46,10 @@ def test_login_success(client, session_factory):
             assert [l.result for l in logs] == [RESULT_SUCCESS]
             assert logs[0].username == "alice"
 
-    asyncio.run(check_log())
+    db_run(check_log())
 
 
-def test_login_wrong_password(client, session_factory):
+def test_login_wrong_password(client, session_factory, db_run):
     client.post("/api/auth/register", json={"username": "alice", "password": "alicepass123"})
     resp = client.post("/api/auth/login", json={"username": "alice", "password": "wrongpass999"})
     assert resp.status_code == 401
@@ -61,7 +60,7 @@ def test_login_wrong_password(client, session_factory):
             n = await db.scalar(select(func.count()).where(LoginLog.result == RESULT_FAILED))
             assert n == 1
 
-    asyncio.run(check_log())
+    db_run(check_log())
 
 
 def test_login_nonexistent_user_same_error(client):
@@ -90,7 +89,7 @@ def test_login_brute_force_lockout(client):
     assert resp.status_code == 200
 
 
-def test_user_row_never_stores_plain_password(client, session_factory):
+def test_user_row_never_stores_plain_password(client, session_factory, db_run):
     client.post("/api/auth/register", json={"username": "alice", "password": "alicepass123"})
 
     async def check():
@@ -99,4 +98,4 @@ def test_user_row_never_stores_plain_password(client, session_factory):
             assert user.password_hash != "alicepass123"
             assert user.password_hash.startswith("$2b$")
 
-    asyncio.run(check())
+    db_run(check())

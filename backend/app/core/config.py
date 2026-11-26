@@ -1,16 +1,23 @@
 """全局配置：唯一入口 get_settings()，来源优先级 环境变量 > backend/.env > 默认值。
 
 降级预案内建（CODING_PLAN §0.7）：重型机制一律做成配置项，不写死。
+测试环境通过 ENV_FILE="" 关闭 .env 加载，确保不触碰真实外部服务。
 """
+import os
 from functools import lru_cache
 from urllib.parse import quote_plus
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# 环境变量 ENV_FILE 可覆盖 .env 路径；设为空串则完全不加载文件
+_ENV_FILE = os.environ.get("ENV_FILE", ".env")
+if _ENV_FILE in ("", '""', "''"):
+    _ENV_FILE = None
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=_ENV_FILE,
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",

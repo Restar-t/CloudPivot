@@ -1,5 +1,4 @@
 """令牌生命周期：me 鉴权 / 刷新轮换 + 重用检测 / 退出黑名单 / 改密失效。"""
-import asyncio
 import time
 
 from sqlalchemy import select
@@ -160,7 +159,7 @@ def test_change_password_wrong_old(client):
     assert resp.json()["code"] == 1004
 
 
-def test_refresh_session_rows_track_rotation(client, session_factory):
+def test_refresh_session_rows_track_rotation(client, session_factory, db_run):
     tokens = _register_and_login(client)
     pair = client.post("/api/auth/refresh", json={"refresh_token": tokens["refresh_token"]}).json()["data"]
     client.post("/api/auth/refresh", json={"refresh_token": pair["refresh_token"]})
@@ -174,4 +173,4 @@ def test_refresh_session_rows_track_rotation(client, session_factory):
             rotated = [r for r in rows if r.revoked_reason == "rotated"]
             assert len(rotated) == 2
 
-    asyncio.run(check())
+    db_run(check())

@@ -34,6 +34,7 @@ class ErrorCode(IntEnum):
     INVALID_FILENAME = 2003      # 非法文件名（穿越/控制字符/超长/保留名）
     FOLDER_CYCLE = 2004          # 移动目标构成循环
     STATE_CONFLICT = 2005        # 状态冲突（终态任务 / 当前版本等）
+    RANGE_NOT_SATISFIABLE = 2006  # Range 起点越界（HTTP 416）
 
     # ---- 3xxx 上传 ----
     FILE_TOO_LARGE = 3001        # 超过单文件大小上限
@@ -74,6 +75,7 @@ _MESSAGES: dict[ErrorCode, str] = {
     ErrorCode.INVALID_FILENAME: "文件名不合法",
     ErrorCode.FOLDER_CYCLE: "不能移动到自身或其子目录",
     ErrorCode.STATE_CONFLICT: "当前状态不允许该操作",
+    ErrorCode.RANGE_NOT_SATISFIABLE: "请求范围不满足",
     ErrorCode.FILE_TOO_LARGE: "文件超过大小上限",
     ErrorCode.TYPE_NOT_ALLOWED: "文件类型不允许上传",
     ErrorCode.CHECKSUM_MISMATCH: "内容校验失败，请重新上传",
@@ -103,6 +105,7 @@ _HTTP_STATUS: dict[ErrorCode, int] = {
     ErrorCode.INVALID_FILENAME: 400,
     ErrorCode.FOLDER_CYCLE: 409,
     ErrorCode.STATE_CONFLICT: 409,
+    ErrorCode.RANGE_NOT_SATISFIABLE: 416,
     ErrorCode.FILE_TOO_LARGE: 413,
     ErrorCode.TYPE_NOT_ALLOWED: 415,
     ErrorCode.CHECKSUM_MISMATCH: 422,
