@@ -149,3 +149,15 @@ class MinioStorage:
 
     async def delete(self, bucket: str, key: str) -> None:
         await self._run(self._client.remove_object, bucket, key)
+
+    async def list_objects(self, bucket: str, prefix: str = ""):
+        """异步生成 (key, last_modified)；对账/GC 用（流式，不聚合）。"""
+        from datetime import datetime as _dt
+
+        def _sync():
+            return list(self._client.list_objects(bucket, prefix=prefix, recursive=True))
+
+        items = await self._run(_sync)
+        for it in items:
+            lm = getattr(it, "last_modified", None)
+            yield it.object_name, (lm if isinstance(lm, _dt) else None)

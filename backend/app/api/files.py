@@ -16,7 +16,7 @@ from app.schemas.file import (
     RenameRequest,
     UploadOut,
 )
-from app.services import file_ops_service, file_service, folder_service, preview_service, zip_service
+from app.services import file_ops_service, file_service, folder_service, preview_service, version_service, zip_service
 
 router = APIRouter(route_class=ApiRoute, prefix="/files", tags=["files"])
 
@@ -139,6 +139,23 @@ async def preview_file(file_id: int, user: CurrentUser, db: DB, storage: Storage
             "Content-Length": str(size),
         },
     )
+
+
+@router.get("/{file_id}/versions")
+async def list_versions(file_id: int, user: CurrentUser, db: DB) -> dict:
+    return await version_service.list_versions(db, user, file_id)
+
+
+@router.post("/{file_id}/versions/{version_no}/restore")
+async def restore_version(file_id: int, version_no: int, user: CurrentUser, db: DB) -> dict:
+    return await version_service.restore_version(db, user, file_id, version_no)
+
+
+@router.delete("/{file_id}/versions/{version_no}")
+async def delete_version(
+    file_id: int, version_no: int, user: CurrentUser, db: DB, storage: StorageDep
+) -> dict:
+    return await version_service.delete_version(db, storage, user, file_id, version_no)
 
 
 @router.delete("/{file_id}")

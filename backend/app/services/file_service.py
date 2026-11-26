@@ -138,25 +138,11 @@ async def upload_file(
         limit = await get_space_quota_limit(db, space)
         await check_and_add_usage(db, space.id, limit, size)
 
-        obj = (
-            await db.execute(
-                select(StorageObject).where(
-                    StorageObject.sha256 == sha256, StorageObject.size == size
-                )
-            )
-        ).scalar_one_or_none()
-        if obj is not None:
-            # 物理去重：内容相同 → 复用对象（ref_count+1），MinIO 里那份新写字节成为孤儿（M7 GC 回收）
-            obj.ref_count += 1
-            new_object = False
-        else:
-            obj = StorageObject(
-                sha256=sha256, size=size, bucket=storage.bucket_formal,
-                object_key=object_key, ref_count=1, status=OBJECT_STATUS_ACTIVE,
-            )
-            db.add(obj)
-            await db.flush()
-            new_object = True
+        from app.services.object_service import resolve_or_register
+
+        # 物理去重统一入口：ACTIVE 复用（ref++）/ DELETED·DELETING 复活 / 新登记
+        obj, reused = await resolve_or_register(db, sha256, size, storage.bucket_formal, object_key)
+        new_object = not reused
 
         file = UserFile(
             space_id=space.id, parent_id=parent_id, name=upload.filename,

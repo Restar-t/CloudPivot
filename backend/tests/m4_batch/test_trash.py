@@ -135,11 +135,12 @@ def test_purge_unique_object_removes_minio_and_quota(api, session_factory, db_ru
 
     async def check_obj():
         async with session_factory() as db:
-            return (await db.execute(select(StorageObject))).scalars().all()
+            rows = (await db.execute(select(StorageObject))).scalars().all()
+            return [(r.status, r.ref_count) for r in rows]
 
-    assert db_run(check_obj()) == []
-    stored_keys = list(api.app.state.storage.objects.keys())
-    assert all(len(k) == 2 for k in stored_keys) and len(stored_keys) == 0  # 内存桶已空
+    # M7.4 状态机：行保留转 DELETED（ref=0），字节已物理删除（内存桶已空）
+    assert db_run(check_obj()) == [("DELETED", 0)]
+    assert len(api.app.state.storage.objects) == 0
 
 
 def test_purge_idempotent_404(api, make_user):

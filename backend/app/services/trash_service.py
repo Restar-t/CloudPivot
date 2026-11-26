@@ -170,12 +170,24 @@ async def purge(db: AsyncSession, storage, user: User, file_id: int) -> dict:
     ))
     await db.commit()
 
-    # 事务提交后再物理删 MinIO（失败仅留孤儿字节，M7 GC 兜底并告警）
+    # 事务提交后再物理删 MinIO；成功 → 行转 DELETED（保留）；失败 → 留 DELETING 由对账重试
     for bucket, key in released["purged_objects"]:
         try:
             await storage.delete(bucket, key)
-        except Exception as exc:  # noqa: BLE001 — 孤儿字节由 M7 对账回收
+        except Exception as exc:  # noqa: BLE001 — 对账循环重试
             logger.error("minio purge failed", extra={"bucket": bucket, "key": key, "error": str(exc)})
+            continue
+        from app.models.storage_object import OBJECT_STATUS_DELETED, OBJECT_STATUS_DELETING
+
+        dead = (await db.execute(
+            select(StorageObject).where(
+                StorageObject.bucket == bucket, StorageObject.object_key == key,
+                StorageObject.status == OBJECT_STATUS_DELETING,
+            )
+        )).scalars().all()
+        for obj_row in dead:
+            obj_row.status = OBJECT_STATUS_DELETED
+    await db.commit()
 
     logger.info("trash purged", extra={"file_id": file_id, **{k: v for k, v in released.items() if k != 'purged_objects'}})
     return {"purged": True, "files": released["files"], "bytes_released": released["bytes"]}
@@ -213,6 +225,17 @@ async def clear(db: AsyncSession, storage, user: User) -> dict:
             await storage.delete(bucket, key)
         except Exception as exc:  # noqa: BLE001
             logger.error("minio purge failed", extra={"bucket": bucket, "key": key, "error": str(exc)})
+            continue
+        from sqlalchemy import select as _sel
+        from app.models.storage_object import OBJECT_STATUS_DELETING as _DEL
+
+        dead = (await db.execute(_sel(StorageObject).where(
+            _sel(StorageObject.bucket) == bucket, _sel(StorageObject.object_key) == key,
+            _sel(StorageObject.status) == _DEL,
+        ))).scalars().all()
+        for obj_row in dead:
+            obj_row.status = "DELETED"
+    await db.commit()
     return {"roots": len(top_ids), "files": total_files, "bytes_released": total_bytes}
 
 
@@ -255,8 +278,12 @@ async def _release_tree(db: AsyncSession, storage, root: UserFile) -> dict:
                     continue
                 obj.ref_count -= 1
                 if obj.ref_count <= 0:
+                    # 两阶段：行置 DELETING（阻止新引用），物理删除在事务提交后执行，
+                    # 成功后行转 DELETED 保留（审计/复活语义，M7.4）
+                    from app.models.storage_object import OBJECT_STATUS_DELETING
+
+                    obj.status = OBJECT_STATUS_DELETING
                     purged_objects.append((obj.bucket, obj.object_key))
-                    await db.delete(obj)
             files += 1
         # 版本行随文件删除（硬删）；user_file 行保留为 DELETED lineage
         await db.execute(

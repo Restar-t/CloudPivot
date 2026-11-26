@@ -379,25 +379,12 @@ async def complete_upload(db: AsyncSession, storage, user: User, upload_id: str)
         if task.status in (TASK_CANCELLED, TASK_EXPIRED):                    # ③ 任务（行锁内重检）
             raise BizError(ErrorCode.UPLOAD_CONFLICT, message="任务已被取消或过期")
 
-        # 去重查找：同内容 ACTIVE 对象 → 复用（ref++），否则登记 merged
-        obj = (
-            await db.execute(
-                select(StorageObject).where(
-                    StorageObject.sha256 == actual_sha, StorageObject.size == total
-                )
-            )
-        ).scalar_one_or_none()
-        if obj is not None:
-            obj.ref_count += 1
-            merged_used = False
-        else:
-            obj = StorageObject(
-                sha256=actual_sha, size=total, bucket=storage.bucket_candidate,
-                object_key=merged_key, ref_count=1, status=OBJECT_STATUS_ACTIVE,
-            )
-            db.add(obj)
-            await db.flush()
-            merged_used = True
+        # 去重统一入口：ACTIVE 复用（ref++，merged 成为孤儿）/ 复活 / 登记 merged
+        from app.services.object_service import resolve_or_register
+
+        obj, reused = await resolve_or_register(db, actual_sha, total,
+                                                storage.bucket_candidate, merged_key)
+        merged_used = not reused
 
         version, file = await _create_version_row(
             db, user.id, task.space_id, task.parent_id, task.file_name,

@@ -18,6 +18,7 @@ _TEST_ENV = {
     "PASSWORD_HASH_ROUNDS": "4",      # 低轮数 bcrypt：只影响哈希成本，不影响逻辑
     "UPLOAD_MAX_FILE_SIZE": "1024",   # 收紧上限：超限用例无需构造大文件
     "UPLOAD_CHUNK_SIZE": "64",        # 64B 分片：小文件即可测多分片/断点续传
+    "CANDIDATE_GRACE_HOURS": "0",     # GC 宽限期 0：孤儿清理用例立即可收集
     "ENV_FILE": "",                   # 不加载 backend/.env（见 config.py 的 env_file 取值）
 }
 os.environ.update(_TEST_ENV)

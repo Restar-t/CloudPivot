@@ -64,8 +64,11 @@ async def lifespan(app: FastAPI):
     except Exception as exc:  # noqa: BLE001
         logger.error("redis connect failed at startup", extra={"error": str(exc)})
 
-    yield
+    from app.services.background import start_background_loops, stop_background_loops
 
+    await start_background_loops(app)
+    yield
+    await stop_background_loops()
     await app.state.redis.aclose()
     app.state.storage.close()
     await dispose_engine()

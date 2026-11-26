@@ -46,3 +46,9 @@ class MemoryStorage:
     async def delete(self, bucket: str, key: str) -> None:
         self.deleted.append((bucket, key))
         self.objects.pop((bucket, key), None)
+
+    async def list_objects(self, bucket: str, prefix: str = ""):
+        """对账用：yield (key, None)；grace 判定在调用方（测试环境 CANDIDATE_GRACE_HOURS=0）。"""
+        for (b, k) in list(self.objects.keys()):
+            if b == bucket and k.startswith(prefix):
+                yield k, None

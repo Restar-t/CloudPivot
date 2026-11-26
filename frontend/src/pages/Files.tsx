@@ -27,6 +27,7 @@ import {
   UploadOutlined,
   ShareAltOutlined,
   EyeOutlined,
+  HistoryOutlined,
 } from "@ant-design/icons";
 import type { TablePaginationConfig } from "antd";
 import { createFolder, getPath, listChildren, renameFile, type FileItem } from "../api/files";
@@ -39,6 +40,7 @@ import {
 } from "../api/transfer";
 import UploadPanel, { type UploadTask } from "../components/UploadPanel";
 import ShareDialog from "../components/ShareDialog";
+import VersionModal from "../components/VersionModal";
 import PreviewModal from "../components/PreviewModal";
 import MoveCopyDialog from "../components/MoveCopyDialog";
 import { batchDelete } from "../api/files";
@@ -81,6 +83,7 @@ export default function Files() {
   const [dialog, setDialog] = useState<"move" | "copy" | null>(null);
   const [shareFile, setShareFile] = useState<FileItem | null>(null);
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
+  const [versionFile, setVersionFile] = useState<FileItem | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -413,7 +416,7 @@ export default function Files() {
           {
             title: "操作",
             key: "actions",
-            width: 220,
+            width: 250,
             render: (_, item) => (
               <Space size={0}>
                 <Tooltip title="重命名">
@@ -429,6 +432,14 @@ export default function Files() {
                 </Tooltip>
                 {!item.is_folder && (
                   <>
+                    <Tooltip title="版本历史">
+                      <Button
+                        size="small"
+                        type="text"
+                        icon={<HistoryOutlined />}
+                        onClick={() => setVersionFile(item)}
+                      />
+                    </Tooltip>
                     <Tooltip title="预览">
                       <Button
                         size="small"
@@ -480,6 +491,14 @@ export default function Files() {
         onDone={() => void onMoveCopyDone()}
       />
 
+      <VersionModal
+        open={versionFile !== null}
+        file={versionFile}
+        onClose={(changed) => {
+          setVersionFile(null);
+          if (changed) void Promise.all([load(), loadQuota()]);
+        }}
+      />
       <ShareDialog
         open={shareFile !== null}
         file={shareFile}
