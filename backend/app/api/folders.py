@@ -28,10 +28,15 @@ async def list_children(
     page_size: int = Query(default=50, ge=1, le=100),
     sort: str = Query(default="name", pattern="^(name|size|uploaded_at)$"),
     order: str = Query(default="asc", pattern="^(asc|desc)$"),
+    folder_only: bool = Query(default=False, description="仅返回文件夹（目录树选择器用）"),
 ) -> PageOut:
     items, total = await folder_service.list_children(
         db, user, folder_id, page, page_size, sort, order
     )
+    if folder_only:
+        items = [i for i in items if i.is_folder]
+        # 过滤后 total 不再准确——树选择器只关心子文件夹，直接给出过滤后数量
+        total = len(items)
     return PageOut(items=items, total=total, page=page, page_size=page_size)
 
 

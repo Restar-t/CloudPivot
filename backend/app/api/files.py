@@ -1,15 +1,22 @@
-"""文件接口：rename（M2）/ upload / download（Range）/ delete（M3）。
-
-下载永远走应用网关（PLAN §2.5）：附件头 + 私有禁缓存 + nosniff；多段 Range 降级 200 全量（已知限制）。
-"""
-from fastapi import APIRouter, Request
+"""文件接口：rename / upload / download / delete（M2-M3）+ move / copy / batch-delete /
+zip / search（M4）。下载与 ZIP 一律走应用网关（PLAN §2.5）。"""
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 
 from app.core.errors import BizError, ErrorCode
 from app.core.response import ApiRoute
 from app.deps import CurrentUser, DB, StorageDep
-from app.schemas.file import FileItemOut, RenameRequest, UploadOut
-from app.services import file_service, folder_service
+from app.schemas.file import (
+    BatchOpOut,
+    CopyRequest,
+    FileItemOut,
+    IdsRequest,
+    MoveRequest,
+    PageOut,
+    RenameRequest,
+    UploadOut,
+)
+from app.services import file_ops_service, file_service, folder_service, zip_service
 
 router = APIRouter(route_class=ApiRoute, prefix="/files", tags=["files"])
 
@@ -90,3 +97,57 @@ async def download(file_id: int, request: Request, user: CurrentUser, db: DB, st
 @router.delete("/{file_id}")
 async def trash(file_id: int, user: CurrentUser, db: DB) -> dict:
     return await file_service.trash_file(db, user, file_id)
+
+
+# ---------- M4：移动 / 复制 / 批量 / ZIP / 搜索 ----------
+@router.post("/move")
+async def move(body: MoveRequest, user: CurrentUser, db: DB) -> BatchOpOut:
+    return BatchOpOut(results=await file_ops_service.move_files(db, user, body.file_ids, body.target_folder_id))
+
+
+@router.post("/copy")
+async def copy(body: CopyRequest, user: CurrentUser, db: DB) -> BatchOpOut:
+    return BatchOpOut(results=await file_ops_service.copy_files(db, user, body.file_ids, body.target_folder_id))
+
+
+@router.post("/batch-delete")
+async def batch_delete(body: IdsRequest, user: CurrentUser, db: DB) -> BatchOpOut:
+    return BatchOpOut(results=await file_ops_service.batch_trash(db, user, body.file_ids))
+
+
+@router.get("/zip")
+async def zip_download(
+    ids: str, request: Request, user: CurrentUser, db: DB, storage: StorageDep
+):
+    """批量打包下载：ids=逗号分隔文件 id；逐文件鉴权预校验后流式输出。"""
+    try:
+        file_ids = [int(x) for x in ids.split(",") if x.strip()]
+    except ValueError:
+        raise BizError(ErrorCode.BAD_REQUEST, message="ids 必须为逗号分隔的文件 id")
+    plan = await zip_service.build_plan(db, user, file_ids)
+    filename = "批量下载.zip"
+    headers = {
+        "Content-Disposition": file_service.content_disposition(filename),
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+    }
+    return StreamingResponse(
+        zip_service.zip_stream(storage, plan),
+        status_code=200, media_type="application/zip", headers=headers,
+    )
+
+
+@router.get("/search")
+async def search(
+    q: str = Query(default="", max_length=100),
+    user: CurrentUser = None, db: DB = None,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    sort: str = Query(default="name", pattern="^(name|size|uploaded_at)$"),
+    order: str = Query(default="asc", pattern="^(asc|desc)$"),
+) -> PageOut:
+    rows, total = await file_ops_service.search_files(db, user, q.strip(), page, page_size, sort, order)
+    return PageOut(
+        items=[FileItemOut.model_validate(r) for r in rows],
+        total=total, page=page, page_size=page_size,
+    )

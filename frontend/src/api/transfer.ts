@@ -99,3 +99,22 @@ export function trashFile(fileId: number): Promise<{ trashed: number; name: stri
 export function getQuota(): Promise<QuotaInfo> {
   return request.get("/users/me/quota");
 }
+
+/** ZIP 批量下载：GET /files/zip?ids=，blob 保存（鉴权失败时后端返回 JSON 错误包）。 */
+export async function downloadZip(fileIds: number[]): Promise<void> {
+  if (!fileIds.length) return;
+  const { accessToken } = useAuthStore.getState();
+  const resp = await axios.get(`/api/files/zip`, {
+    params: { ids: fileIds.join(",") },
+    responseType: "blob",
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+  });
+  const contentType = String(resp.headers["content-type"] ?? "");
+  if (contentType.includes("application/json")) {
+    const body = JSON.parse(await (resp.data as Blob).text());
+    throw new Error(body.message || "打包下载失败");
+  }
+  const disposition = String(resp.headers["content-disposition"] ?? "");
+  const m = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  saveBlob(resp.data as Blob, m ? decodeURIComponent(m[1]) : "批量下载.zip");
+}

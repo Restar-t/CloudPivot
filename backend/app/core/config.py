@@ -82,6 +82,8 @@ class Settings(BaseSettings):
     share_transfer_recheck_seconds: int = 3
     download_rate_limit_bytes: int = 2 * 1024**2  # 2MiB/s
     download_rate_burst_bytes: int = 8 * 1024**2
+    zip_max_entries: int = 100
+    zip_max_total_bytes: int = 2 * 1024**3  # 2GiB
 
     # ---------- 派生 ----------
     @property

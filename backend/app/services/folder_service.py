@@ -193,3 +193,30 @@ async def is_ancestor(db: AsyncSession, ancestor_id: int, node_id: int) -> bool:
             return False
         cur = node.parent_id
     return False
+
+
+async def first_free_name(db: AsyncSession, space_id: int, parent_id: int, name: str) -> str | None:
+    """目录里第一个可用名：原名可用 → None；否则原名（1） → 原名（2）…（序号插扩展名前）。
+
+    供复制自动命名与还原冲突建议共用（Windows 风格：`report（1）.txt`）。
+    """
+    taken = await db.scalar(
+        select(UserFile.id).where(
+            UserFile.space_id == space_id, UserFile.parent_id == parent_id,
+            UserFile.name == name, UserFile.status == FILE_STATUS_NORMAL,
+        )
+    )
+    if not taken:
+        return None
+    stem, dot, ext = name.rpartition(".")
+    for i in range(1, 1000):
+        candidate = f"{stem}（{i}）.{ext}" if dot else f"{name}（{i}）"
+        exists = await db.scalar(
+            select(UserFile.id).where(
+                UserFile.space_id == space_id, UserFile.parent_id == parent_id,
+                UserFile.name == candidate, UserFile.status == FILE_STATUS_NORMAL,
+            )
+        )
+        if not exists:
+            return candidate
+    raise BizError(ErrorCode.NAME_CONFLICT, message="无法生成可用文件名")

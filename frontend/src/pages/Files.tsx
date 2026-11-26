@@ -36,6 +36,9 @@ import {
   type QuotaInfo,
 } from "../api/transfer";
 import UploadPanel, { type UploadTask } from "../components/UploadPanel";
+import MoveCopyDialog from "../components/MoveCopyDialog";
+import { batchDelete } from "../api/files";
+import { downloadZip } from "../api/transfer";
 import { fileKind, formatBytes, formatDateTime } from "../utils/format";
 
 type SortField = "name" | "size" | "uploaded_at";
@@ -66,7 +69,12 @@ export default function Files() {
   const [uploadQueue, setUploadQueue] = useState<UploadTask[]>([]);
   const [quota, setQuota] = useState<QuotaInfo | null>(null);
   const [downloading, setDownloading] = useState<Set<number>>(new Set());
+  const [zipping, setZipping] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // M4：多选批量 / 移动复制对话框 / 搜索
+  const [selectedIds, setSelectedIds] = useState<import("react").Key[]>([]);
+  const [dialog, setDialog] = useState<"move" | "copy" | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -144,10 +152,47 @@ export default function Files() {
     try {
       const r = await trashFile(item.id);
       message.success(`「${r.name}」已移入回收站${r.trashed > 1 ? `（含 ${r.trashed} 项）` : ""}`);
+      setSelectedIds([]);
       await Promise.all([load(), loadQuota()]);
     } catch {
       // 拦截器已提示
     }
+  };
+
+  // ---------- M4：批量操作 ----------
+  const selectedNumeric = selectedIds.map(Number);
+
+  const onBatchDelete = async () => {
+    try {
+      const r = await batchDelete(selectedNumeric);
+      const ok = r.results.filter((x) => x.ok);
+      const failed = r.results.filter((x) => !x.ok);
+      if (failed.length === 0) {
+        message.success(`已删除 ${ok.length} 项进回收站`);
+      } else {
+        message.warning(`${ok.length} 项成功，${failed.length} 项失败：${failed[0].message ?? ""}`);
+      }
+      setSelectedIds([]);
+      await Promise.all([load(), loadQuota()]);
+    } catch {
+      // 拦截器已提示
+    }
+  };
+
+  const onZip = async () => {
+    setZipping(true);
+    try {
+      await downloadZip(selectedNumeric);
+    } catch (e) {
+      message.error((e as Error).message || "打包下载失败");
+    } finally {
+      setZipping(false);
+    }
+  };
+
+  const onMoveCopyDone = async () => {
+    setSelectedIds([]);
+    await Promise.all([load(), loadQuota()]);
   };
 
   const onCreate = async ({ name }: { name: string }) => {
@@ -208,6 +253,13 @@ export default function Files() {
       }
       extra={
         <Space>
+          <Input.Search
+            placeholder="搜索文件名"
+            size="middle"
+            style={{ width: 200 }}
+            allowClear
+            onSearch={(v) => navigate(v.trim() ? `/search?q=${encodeURIComponent(v.trim())}` : "/search")}
+          />
           {quota && (
             <Tooltip
               title={`已用 ${formatBytes(quota.used_bytes)} / 总量 ${formatBytes(quota.quota_bytes)}，剩余 ${formatBytes(quota.remaining_bytes)}`}
@@ -242,6 +294,45 @@ export default function Files() {
         </Space>
       }
     >
+      {selectedIds.length > 0 && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "8px 12px",
+            marginBottom: 12,
+            background: "#e6f4ff",
+            borderRadius: 8,
+          }}
+        >
+          <Typography.Text>已选 {selectedIds.length} 项：</Typography.Text>
+          <Button size="small" icon={<DownloadOutlined />} loading={zipping} onClick={() => void onZip()}>
+            ZIP 下载
+          </Button>
+          <Button size="small" onClick={() => setDialog("move")}>
+            移动到…
+          </Button>
+          <Button size="small" onClick={() => setDialog("copy")}>
+            复制到…
+          </Button>
+          <Popconfirm
+            title={`删除选中的 ${selectedIds.length} 项？`}
+            description="将移入回收站（可在回收站还原）。"
+            okText="删除"
+            cancelText="取消"
+            okButtonProps={{ danger: true }}
+            onConfirm={() => void onBatchDelete()}
+          >
+            <Button size="small" danger icon={<DeleteOutlined />}>
+              批量删除
+            </Button>
+          </Popconfirm>
+          <Button size="small" type="text" onClick={() => setSelectedIds([])}>
+            取消选择
+          </Button>
+        </div>
+      )}
       <UploadPanel
         queue={uploadQueue}
         onFinished={() => void onUploadFinished()}
@@ -252,6 +343,10 @@ export default function Files() {
       loading={loading}
       dataSource={items}
       onChange={onTableChange}
+      rowSelection={{
+        selectedRowKeys: selectedIds,
+        onChange: (keys) => setSelectedIds(keys),
+      }}
       locale={{
         emptyText: <Empty description="此目录为空，点击右上角「上传」添加文件" />,
       }}
@@ -351,6 +446,14 @@ export default function Files() {
             ),
           },
         ]}
+      />
+
+      <MoveCopyDialog
+        open={dialog !== null}
+        mode={dialog === "copy" ? "copy" : "move"}
+        fileIds={selectedNumeric}
+        onClose={() => setDialog(null)}
+        onDone={() => void onMoveCopyDone()}
       />
 
       <Modal

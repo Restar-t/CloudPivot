@@ -80,6 +80,7 @@ export default function MainLayout() {
           <nav style={{ marginLeft: 24, display: "flex", gap: 16 }}>
             {[
               { to: "/", label: "我的文件" },
+              { to: "/trash", label: "回收站" },
               { to: "/system", label: "系统状态" },
             ].map((item) => {
               const active =

@@ -25,6 +25,40 @@ class RenameRequest(BaseModel):
     new_name: str = Field(min_length=1, max_length=255)
 
 
+class IdsRequest(BaseModel):
+    file_ids: list[int] = Field(min_length=1, max_length=200)
+
+
+class MoveRequest(IdsRequest):
+    target_folder_id: int = Field(ge=0)
+
+
+class CopyRequest(IdsRequest):
+    target_folder_id: int = Field(ge=0)
+
+
+class BatchOpOut(BaseModel):
+    results: list[dict]
+
+
+class TrashItemOut(BaseModel):
+    id: int
+    name: str
+    is_folder: bool
+    size: int
+    deleted_at: datetime
+    remaining_days: int
+    parent_id: int
+    original_path: str
+
+
+class TrashPageOut(BaseModel):
+    items: list[TrashItemOut]
+    total: int
+    page: int
+    page_size: int
+
+
 class UploadOut(FileItemOut):
     version_no: int
     storage_object_id: int
