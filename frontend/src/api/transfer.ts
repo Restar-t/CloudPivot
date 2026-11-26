@@ -118,3 +118,73 @@ export async function downloadZip(fileIds: number[]): Promise<void> {
   const m = disposition.match(/filename\*=UTF-8''([^;]+)/i);
   saveBlob(resp.data as Blob, m ? decodeURIComponent(m[1]) : "批量下载.zip");
 }
+
+// ---------- M6 分片上传 ----------
+export interface UploadInitResult {
+  instant: boolean;
+  upload_id: string | null;
+  chunk_size: number;
+  chunk_count: number;
+  target_file_id: number | null;
+  expire_at?: string;
+  file?: { id: number; name: string; size: number };
+  version_no?: number;
+}
+
+export function initUpload(payload: {
+  file_name: string;
+  size: number;
+  parent_id: number;
+  declared_sha256: string;
+}): Promise<UploadInitResult> {
+  return request.post("/uploads/init", payload);
+}
+
+/** 上传单分片：原始字节 + 声明校验和。 */
+export function putPart(
+  uploadId: string,
+  partNo: number,
+  blob: Blob,
+  sha256: string,
+  signal?: AbortSignal,
+): Promise<{ part_no: number; etag: string; received: number }> {
+  return request.put(`/uploads/${uploadId}/parts/${partNo}`, blob, {
+    params: { sha256 },
+    headers: { "Content-Type": "application/octet-stream" },
+    timeout: 120000,
+    signal,
+  }) as unknown as Promise<{ part_no: number; etag: string; received: number }>;
+}
+
+export interface UploadStatusResult {
+  upload_id: string;
+  status: string;
+  file_name: string;
+  size: number;
+  chunk_size: number;
+  chunk_count: number;
+  received_parts: number[];
+  missing_parts: number[];
+  corrupted_parts: number[];
+  expire_at: string;
+  result_version_id: number | null;
+}
+
+export function uploadStatus(uploadId: string): Promise<UploadStatusResult> {
+  return request.get(`/uploads/${uploadId}`);
+}
+
+export function completeUpload(uploadId: string): Promise<{
+  completed: boolean;
+  duplicate: boolean;
+  file: { id: number; name: string; size: number };
+  version_id: number;
+  version_no: number;
+  sha256: string;
+}> {
+  return request.post(`/uploads/${uploadId}/complete`);
+}
+
+export function cancelUpload(uploadId: string): Promise<{ cancelled: boolean; duplicate?: boolean; completed?: boolean }> {
+  return request.post(`/uploads/${uploadId}/cancel`);
+}

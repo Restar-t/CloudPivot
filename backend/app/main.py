@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api import auth, files, folders, health, public_share, shares, trash, users
+from app.api import auth, files, folders, health, public_share, shares, trash, uploads, users
 from app.core.config import get_settings
 from app.core.errors import BizError, ErrorCode
 from app.core.logging import (
@@ -163,6 +163,7 @@ def create_app() -> FastAPI:
     app.include_router(trash.router, prefix=settings.api_prefix)
     app.include_router(shares.router, prefix=settings.api_prefix)
     app.include_router(public_share.router, prefix=settings.api_prefix)
+    app.include_router(uploads.router, prefix=settings.api_prefix)
     return app
 
 
