@@ -78,10 +78,12 @@ netdisk/
 ## 里程碑进度
 
 - [x] M0 骨架与横切基础（compose 一键起 / 冒烟绿 / 前后端联通）
+- [x] compose 全栈验证（五容器 healthy、/health 三依赖 up、重启持久化、浏览器实测）
 - [x] M1 认证与账号（注册/登录/刷新轮换+重用检测/退出/改密/爆破防护）
 - [x] M2 空间与目录树（个人空间/目录 CRUD/分页排序/面包屑/重命名 generation/越权 404 隔离）
-- [x] compose 全栈验证（Docker Desktop 一键起五容器、/health 三依赖 up、冒烟全绿、
-      浏览器登录/建目录实测、backend 重启持久化验证）
+- [x] M3 单文件闭环（三层数据模型：user_file→file_version→storage_object；流式上传
+      SHA-256 核验/物理去重/完整 Range 下载/删除进回收站/配额事务校验；84 测试 +
+      容器栈冒烟全绿 + 浏览器 e2e）← **"中"级 8 项功能全部就位**
 - [ ] M2 空间与目录树（RBAC 地基）
 - [ ] M3 单文件闭环
 - [ ] M4 回收站/移动/搜索/ZIP

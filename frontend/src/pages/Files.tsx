@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   Breadcrumb,
@@ -8,25 +8,39 @@ import {
   Form,
   Input,
   Modal,
+  Popconfirm,
+  Progress,
   Space,
   Table,
+  Tooltip,
   Typography,
   message,
 } from "antd";
 import {
+  DeleteOutlined,
+  DownloadOutlined,
   FileOutlined,
   FolderOutlined,
   FolderAddOutlined,
   ReloadOutlined,
   EditOutlined,
+  UploadOutlined,
 } from "@ant-design/icons";
 import type { TablePaginationConfig } from "antd";
 import { createFolder, getPath, listChildren, renameFile, type FileItem } from "../api/files";
+import {
+  downloadFile,
+  getQuota,
+  precheckFile,
+  trashFile,
+  type QuotaInfo,
+} from "../api/transfer";
+import UploadPanel, { type UploadTask } from "../components/UploadPanel";
 import { fileKind, formatBytes, formatDateTime } from "../utils/format";
 
 type SortField = "name" | "size" | "uploaded_at";
 
-/** 文件列表页（M2）：面包屑 + 目录浏览 + 新建文件夹 + 重命名；上传/下载 M3 接入。 */
+/** 文件页（M2+M3）：面包屑 / 目录浏览 / 新建文件夹 / 重命名 / 上传 / 下载 / 删除进回收站 / 配额条。 */
 export default function Files() {
   const { folderId } = useParams();
   const currentId = folderId ? Number(folderId) : 0;
@@ -47,6 +61,12 @@ export default function Files() {
   const [renameLoading, setRenameLoading] = useState(false);
   const [createForm] = Form.useForm<{ name: string }>();
   const [renameForm] = Form.useForm<{ new_name: string }>();
+
+  // M3：上传队列 / 配额 / 正在下载的行
+  const [uploadQueue, setUploadQueue] = useState<UploadTask[]>([]);
+  const [quota, setQuota] = useState<QuotaInfo | null>(null);
+  const [downloading, setDownloading] = useState<Set<number>>(new Set());
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -69,6 +89,66 @@ export default function Files() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const loadQuota = useCallback(async () => {
+    try {
+      setQuota(await getQuota());
+    } catch {
+      // 配额读取失败不阻塞页面
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadQuota();
+  }, [loadQuota]);
+
+  // ---------- M3：上传 / 下载 / 删除 ----------
+  const onPickFiles = (list: FileList | null) => {
+    if (!list) return;
+    const accepted: UploadTask[] = [];
+    Array.from(list).forEach((file) => {
+      const problem = precheckFile(file);
+      if (problem) {
+        message.warning(`「${file.name}」${problem}`);
+        return;
+      }
+      accepted.push({ uid: `${Date.now()}-${Math.random().toString(16).slice(2)}`, file, parentId: currentId });
+    });
+    if (accepted.length) setUploadQueue((q) => [...q, ...accepted]);
+    if (fileInputRef.current) fileInputRef.current.value = ""; // 允许重复选同一文件
+  };
+
+  const onUploadFinished = async () => {
+    await Promise.all([load(), loadQuota()]);
+  };
+
+  const removeUploadTask = (uid: string) =>
+    setUploadQueue((q) => q.filter((t) => t.uid !== uid));
+
+  const onDownload = async (item: FileItem) => {
+    setDownloading((s) => new Set(s).add(item.id));
+    try {
+      await downloadFile(item.id, item.name);
+    } catch (e) {
+      message.error((e as Error).message || "下载失败");
+    } finally {
+      setDownloading((s) => {
+        const next = new Set(s);
+        next.delete(item.id);
+        return next;
+      });
+    }
+  };
+
+  const onTrash = async (item: FileItem) => {
+    try {
+      const r = await trashFile(item.id);
+      message.success(`「${r.name}」已移入回收站${r.trashed > 1 ? `（含 ${r.trashed} 项）` : ""}`);
+      await Promise.all([load(), loadQuota()]);
+    } catch {
+      // 拦截器已提示
+    }
+  };
 
   const onCreate = async ({ name }: { name: string }) => {
     setCreateLoading(true);
@@ -128,33 +208,53 @@ export default function Files() {
       }
       extra={
         <Space>
+          {quota && (
+            <Tooltip
+              title={`已用 ${formatBytes(quota.used_bytes)} / 总量 ${formatBytes(quota.quota_bytes)}，剩余 ${formatBytes(quota.remaining_bytes)}`}
+            >
+              <div style={{ width: 160, lineHeight: 1.2 }}>
+                <Progress
+                  percent={Math.min(100, (quota.used_bytes / quota.quota_bytes) * 100)}
+                  size="small"
+                  showInfo={false}
+                  status={quota.remaining_bytes === 0 ? "exception" : "normal"}
+                />
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {formatBytes(quota.used_bytes)} / {formatBytes(quota.quota_bytes)}
+                </Typography.Text>
+              </div>
+            </Tooltip>
+          )}
           <Button icon={<ReloadOutlined />} onClick={() => void load()} />
-          <Button type="primary" icon={<FolderAddOutlined />} onClick={() => setCreateOpen(true)}>
+          <Button icon={<FolderAddOutlined />} onClick={() => setCreateOpen(true)}>
             新建文件夹
           </Button>
+          <Button type="primary" icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>
+            上传
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            hidden
+            onChange={(e) => onPickFiles(e.target.files)}
+          />
         </Space>
       }
     >
+      <UploadPanel
+        queue={uploadQueue}
+        onFinished={() => void onUploadFinished()}
+        onRemove={removeUploadTask}
+      />
       <Table<FileItem>
-        rowKey="id"
-        loading={loading}
-        dataSource={items}
-        onChange={onTableChange}
-        locale={{
-          emptyText: (
-            <Empty
-              description={
-                <span>
-                  此目录为空
-                  <br />
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    文件上传功能将在下一阶段（M3）开放
-                  </Typography.Text>
-                </span>
-              }
-            />
-          ),
-        }}
+      rowKey="id"
+      loading={loading}
+      dataSource={items}
+      onChange={onTableChange}
+      locale={{
+        emptyText: <Empty description="此目录为空，点击右上角「上传」添加文件" />,
+      }}
         pagination={{
           current: page,
           pageSize,
@@ -212,18 +312,42 @@ export default function Files() {
           {
             title: "操作",
             key: "actions",
-            width: 100,
+            width: 160,
             render: (_, item) => (
-              <Button
-                size="small"
-                icon={<EditOutlined />}
-                onClick={() => {
-                  setRenameTarget(item);
-                  renameForm.setFieldsValue({ new_name: item.name });
-                }}
-              >
-                重命名
-              </Button>
+              <Space size={0}>
+                <Tooltip title="重命名">
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<EditOutlined />}
+                    onClick={() => {
+                      setRenameTarget(item);
+                      renameForm.setFieldsValue({ new_name: item.name });
+                    }}
+                  />
+                </Tooltip>
+                {!item.is_folder && (
+                  <Tooltip title="下载">
+                    <Button
+                      size="small"
+                      type="text"
+                      icon={<DownloadOutlined />}
+                      loading={downloading.has(item.id)}
+                      onClick={() => void onDownload(item)}
+                    />
+                  </Tooltip>
+                )}
+                <Popconfirm
+                  title={item.is_folder ? "将此目录及其内容移入回收站？" : "将此文件移入回收站？"}
+                  okText="删除"
+                  cancelText="取消"
+                  onConfirm={() => void onTrash(item)}
+                >
+                  <Tooltip title="删除（进回收站）">
+                    <Button size="small" type="text" danger icon={<DeleteOutlined />} />
+                  </Tooltip>
+                </Popconfirm>
+              </Space>
             ),
           },
         ]}
